@@ -120,7 +120,7 @@ textarea{resize:none;height:76px}
 #logo{flex:none;width:40px;height:40px;display:grid;place-items:center;color:var(--blue)}
 #logo .mark{width:26px;height:26px}
 #q{padding-left:2px}
-#splash .mark{width:96px;height:96px;color:var(--blue);margin:0}#top .x svg{width:20px;height:20px}
+#top .x svg{width:20px;height:20px}
 @media (min-width:900px){#top{right:auto;width:380px}}
 nav button.fab{min-width:54px;width:54px;height:54px;padding:0;border-radius:50%;align-self:center;justify-content:center;margin:0 4px;background:var(--blue);color:#fff;box-shadow:0 6px 16px color-mix(in srgb,var(--blue) 45%,transparent)}
 nav button.fab svg{width:26px;height:26px;stroke-width:2.2}
@@ -149,16 +149,11 @@ body.menu #drawer{transform:none}body.menu #scrim{opacity:1;pointer-events:auto}
 input[type=range]{padding:0;background:none;accent-color:var(--blue)}
 #miGbv svg{color:var(--gbv)}
 /* Start screen */
-#splash{position:fixed;inset:0;z-index:1000;background:var(--splash);display:grid;place-content:center;justify-items:center;gap:22px;transition:opacity .6s var(--ease),transform .8s var(--ease)}
-#splash.done{opacity:0;transform:scale(1.08);pointer-events:none}
-#splash .mark{position:relative;width:96px;height:96px}
-#splash .mark *{position:absolute;left:50%;top:50%;border-radius:50%}
-#splash .mark b{width:26px;height:26px;margin:-13px;background:var(--blue);box-shadow:0 0 0 5px var(--splash),0 0 0 7px var(--blue);animation:pop .7s var(--spring) both}
-#splash .mark i{width:96px;height:96px;margin:-48px;box-shadow:inset 0 0 0 2px var(--blue);opacity:0;animation:wave 1.3s var(--ease) .25s both}
-#splash .mark i+i{animation-delay:.55s}
-#splash h1{font-size:30px;font-weight:700;animation:rise .7s var(--ease) .35s both}
-@keyframes pop{from{transform:scale(0)}}
-@keyframes wave{0%{transform:scale(.2);opacity:.9}100%{transform:scale(1.25);opacity:0}}
+#splash{position:fixed;inset:0;z-index:1000;background:#fff;color:#10151c;display:grid;place-content:center;justify-items:center;gap:16px;transition:opacity .55s var(--ease)}
+#splash.done{opacity:0;pointer-events:none}
+#splash video{width:min(88vw,560px);height:auto;display:block}
+#splash h1{font-size:19px;font-weight:600;letter-spacing:.04em;color:var(--blue);opacity:0;animation:rise .6s var(--ease) 2.1s both}
+#splash small{position:absolute;bottom:calc(env(safe-area-inset-bottom) + 22px);color:#8a9099;font-size:12px}
 @media (max-width:899px){.leaflet-bottom{bottom:80px}}
 @media (min-width:900px){
   nav{left:16px;top:50%;bottom:auto;transform:translateY(-50%);flex-direction:column}
@@ -171,7 +166,7 @@ input[type=range]{padding:0;background:none;accent-color:var(--blue)}
 </style>
 </head>
 <body>
-<div id="splash"><div class="mark"><i></i><i></i><b></b></div><h1>GeoBots</h1></div>
+<div id="splash"><video id="introV" playsinline muted autoplay preload="auto" poster="intro.jpg"><source src="intro.mp4" type="video/mp4"></video><h1>GeoBots</h1><small>Tap to skip</small></div>
 <div id="map"></div>
 
 <div id="top" class="glass"><span id="logo" aria-label="GeoBots"><svg class="mark" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 10c0 5-5.54 10.19-7.4 11.8a1 1 0 0 1-1.2 0C9.54 20.19 4 15 4 10a8 8 0 0 1 16 0" fill="none" stroke="currentColor" stroke-width="1.9"/><circle cx="12" cy="10" r="3.1" fill="currentColor" stroke="none"/></svg></span><input id="q" type="search" placeholder="Search a place in Gaborone" aria-label="Search a place" autocomplete="off"><span id="count" hidden></span><button class="x" id="bMenu" aria-label="Menu"><svg viewBox="0 0 24 24"><path d="M4 12h16M4 6h16M4 18h16"/></svg></button></div>
@@ -537,7 +532,12 @@ $('#sheetBody').addEventListener('click', e => {
 
 render();
 moveInd(); addEventListener('resize', moveInd); if (document.fonts) document.fonts.ready.then(moveInd);
-setTimeout(() => { const s = $('#splash'); s.classList.add('done'); setTimeout(() => s.remove(), 900); }, 1700);
+(function(){ const s = $('#splash'); if (!s) return; let gone = false;
+  const bye = () => { if (gone) return; gone = true; s.classList.add('done'); setTimeout(() => s.remove(), 700); };
+  const v = $('#introV');
+  if (v){ v.addEventListener('ended', bye); v.addEventListener('error', bye); const p = v.play(); if (p && p.catch) p.catch(() => {}); }
+  s.addEventListener('click', bye); s.addEventListener('touchstart', bye, {passive:true});
+  setTimeout(bye, 4200); })();
 </script>
 </body>
 </html>
