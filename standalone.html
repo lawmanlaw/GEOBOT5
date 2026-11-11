@@ -678,13 +678,14 @@ svg.leaflet-image-layer.leaflet-interactive path {
   --ease:cubic-bezier(.22,1,.36,1); --spring:cubic-bezier(.3,1.4,.5,1); --splash:#f3f6f9;
   --font:"Outfit",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
 }
-@media (prefers-color-scheme:dark){:root{
+:root{
   --ink:#f2f4f7; --muted:#a3acb9; --blue:#5b9bff; --glass:rgba(22,26,34,.62); --glass-strong:rgba(22,26,34,.84);
   --fill:rgba(255,255,255,.09); --splash:#0e1116; --shine:inset 0 1px 0 rgba(255,255,255,.14), 0 12px 32px rgba(0,0,0,.45);
-}}
+ color-scheme:dark;
+}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{height:100%;margin:0}
-body{font:15px/1.45 var(--font);color:var(--ink);background:#dfe5ea;overflow:hidden}
+body{font:15px/1.45 var(--font);color:var(--ink);background:#0e1116;overflow:hidden}
 button,input,select,textarea{font:inherit;color:inherit}
 button{border:0;background:none;cursor:pointer;padding:0}
 button:focus,input:focus,select:focus,textarea:focus{outline:none}
@@ -693,7 +694,7 @@ h1,h2,h3,p{margin:0}
 [hidden]{display:none!important}
 .glass{background:var(--glass);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);box-shadow:var(--shine)}
 
-#map{position:fixed;inset:0;background:#dfe5ea;z-index:0}
+#map{position:fixed;inset:0;background:#0e1116;z-index:0}
 .leaflet-container{font-family:var(--font)}
 .leaflet-control-attribution{background:var(--glass)!important;-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);border-radius:8px 0 0 0;color:var(--muted)!important;font-size:10px}
 .leaflet-control-attribution a{color:var(--muted)!important}
@@ -728,7 +729,7 @@ nav button.on{color:var(--blue)}
 nav button.sos{color:var(--red)}
 
 /* Sheet */
-#sheet{position:fixed;z-index:550;left:10px;right:10px;bottom:calc(max(12px,env(safe-area-inset-bottom)) + 76px);max-height:66vh;border-radius:24px;display:flex;flex-direction:column;transform:translateY(24px);opacity:0;pointer-events:none;transition:transform .42s var(--ease),opacity .28s}
+#sheet{position:fixed;z-index:550;left:10px;right:10px;bottom:calc(max(12px,env(safe-area-inset-bottom)) + 76px);max-height:54vh;border-radius:24px;display:flex;flex-direction:column;transform:translateY(24px);opacity:0;pointer-events:none;transition:transform .42s var(--ease),opacity .28s}
 #sheet.open{transform:none;opacity:1;pointer-events:auto}
 #sheet header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 6px}
 #sheet h2{font-size:19px;font-weight:700}
@@ -815,6 +816,9 @@ input[type=range]{padding:0;background:none;accent-color:var(--blue)}
 .sk,#bLocate.busy svg{animation:skp 1.3s ease-in-out infinite}
 .btn[disabled]{opacity:.6;cursor:default}
 #map.loading{background-image:linear-gradient(var(--fill) 2px,transparent 2px),linear-gradient(90deg,var(--fill) 2px,transparent 2px);background-size:96px 96px}
+#map.darkmap .leaflet-tile-pane{filter:invert(1) hue-rotate(180deg) brightness(.92) contrast(.88) saturate(.45)}
+.sq{width:10px;height:10px;border-radius:2px;background:var(--c);flex:none}
+#bShield.on{color:#38b6ff}
 /* Start screen */
 #splash{position:fixed;inset:0;z-index:1000;background:var(--splash);display:grid;place-content:center;justify-items:center;gap:20px;transition:opacity .6s var(--ease),transform .8s var(--ease)}
 #splash.done{opacity:0;transform:scale(1.06);pointer-events:none}
@@ -858,6 +862,7 @@ input[type=range]{padding:0;background:none;accent-color:var(--blue)}
 
 <div id="ctl">
   <button class="glass" id="bLayers" aria-label="Map style and filters"><svg viewBox="0 0 24 24"><path d="M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83Z"/><path d="m6.08 9.5-3.48 1.59a1 1 0 0 0 0 1.81l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9a1 1 0 0 0 0-1.83L17.9 9.5"/></svg></button>
+  <button class="glass" id="bShield" aria-label="Shield"><svg viewBox="0 0 24 24"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67 0C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/></svg></button>
   <button class="glass" id="bLocate" aria-label="Show my location"><svg viewBox="0 0 24 24"><path d="M2 12h3M19 12h3M12 2v3M12 19v3"/><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="3"/></svg></button>
   <button class="glass" id="bIn" aria-label="Zoom in">+</button>
   <button class="glass" id="bOut" aria-label="Zoom out">&minus;</button>
@@ -878,7 +883,7 @@ input[type=range]{padding:0;background:none;accent-color:var(--blue)}
 <nav class="glass">
   <i class="ind"></i>
   <button data-view="map" class="on"><svg viewBox="0 0 24 24"><path d="M14.1 5.55a2 2 0 0 1-1.79 0L8.1 3.45a2 2 0 0 0-1.79 0L3.55 4.83A1 1 0 0 0 3 5.72v12.76a1 1 0 0 0 1.45.9l3.66-1.84a2 2 0 0 1 1.79 0l4.21 2.11a2 2 0 0 0 1.79 0l4.55-2.28a1 1 0 0 0 .55-.89V3.72a1 1 0 0 0-1.45-.9l-3.66 1.84"/><path d="M15 5.76v15M9 3.24v15"/></svg>Map</button>
-  <button data-view="insights"><svg viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9M13 17V5M8 17v-3"/></svg>Insights</button>
+  <button data-view="insights"><svg viewBox="0 0 24 24"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9M13 17V5M8 17v-3"/></svg>Feed</button>
   <button data-view="report" class="fab" aria-label="Report an incident"><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5v14"/></svg></button>
   <button data-view="thusa" class="sos"><svg viewBox="0 0 24 24"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/></svg>Thusa!</button>
   <button data-view="account"><svg viewBox="0 0 24 24"><circle cx="12" cy="7" r="4"/><path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/></svg>Account</button>
@@ -925,6 +930,7 @@ let draft = null, view = 'map';
 
 /* Map */
 const BASES = {
+  dark:{l:'Dark', u:'https://tile.openstreetmap.org/{z}/{x}/{y}.png', o:{maxZoom:19}, d:1},
   standard:{l:'Standard', u:'https://tile.openstreetmap.org/{z}/{x}/{y}.png', o:{maxZoom:19}},
   human:{l:'Humanitarian', u:'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', o:{maxZoom:19}},
   terrain:{l:'Terrain', u:'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', o:{maxZoom:19,maxNativeZoom:17}}
@@ -936,11 +942,12 @@ const map = L.map('map', {
   inertia:true, inertiaDeceleration:2200, easeLinearity:.2, tapTolerance:12, bounceAtZoomLimits:false, tapHold:true
 });
 map.attributionControl.setPrefix(false);
-let baseKey = store.get('gb_base','standard'), baseLayer;
+let baseKey = store.get('gb_base2','dark'), baseLayer;
 function setBase(k){
-  if (!BASES[k]) k = 'standard';
+  if (!BASES[k]) k = 'dark';
+  $('#map').classList.toggle('darkmap', !!BASES[k].d);
   if (baseLayer) map.removeLayer(baseLayer);
-  baseKey = k; store.set('gb_base', k);
+  baseKey = k; store.set('gb_base2', k);
   baseLayer = L.tileLayer(BASES[k].u, Object.assign({attribution:ATTR, keepBuffer:4, updateWhenZooming:false}, BASES[k].o)).addTo(map);
   $('#map').classList.add('loading'); baseLayer.once('load', () => $('#map').classList.remove('loading'));
 }
@@ -950,7 +957,7 @@ const pinIcon = (cls, ring) => L.divIcon({className:'', iconSize:[0,0], iconAnch
   html:'<div class="pin '+cls+'"><i class="glow"></i>'+(ring?'<i class="ring"></i>':'')+'<i class="dot"></i></div>'});
 const layer = L.layerGroup().addTo(map);
 const all = () => SAMPLES.concat(mine);
-const shown = () => all().filter(i => !hidden[i.type]);
+const shown = () => all().filter(i => !hidden[i.type] && inShield(i));
 function render(){
   layer.clearLayers();
   shown().forEach(i => {
@@ -1020,12 +1027,12 @@ function reportForm(){
     '<p class="muted">Saved on this device for now. Do not include names of people.</p>');
 }
 
-function insights(tab){ tab = tab || 'trends';
+function insights(tab){ tab = tab || 'nearby';
   const d = shown(), max = Math.max(1, ...Object.keys(TYPES).map(k => d.filter(i => i.type === k).length));
-  const seg = '<div class="grid" style="grid-template-columns:repeat(3,1fr)">' + ['trends','wanted','missing'].map(k => '<button class="opt' + (k === tab ? ' on' : '') + '" data-act="tab" data-k="' + k + '" style="justify-content:center;text-transform:capitalize">' + k + '</button>').join('') + '</div>';
+  const seg = '<div class="grid" style="grid-template-columns:repeat(4,1fr)">' + ['nearby','trends','wanted','missing'].map(k => '<button class="opt' + (k === tab ? ' on' : '') + '" data-act="tab" data-k="' + k + '" style="justify-content:center;text-transform:capitalize">' + k + '</button>').join('') + '</div>';
   const day = d.filter(i => Date.now()-i.time < 24*H).length;
   const night = d.filter(i => { const h = new Date(i.time).getHours(); return h >= 19 || h < 6; }).length;
-  open('Insights', seg + (tab !== 'trends' ? '<p>No ' + tab + ' notices yet.</p><p class="muted">Police notices appear here once that service is connected.</p>' :
+  open('Feed', seg + (tab === 'nearby' ? feed() : tab !== 'trends' ? '<p>No ' + tab + ' notices yet.</p><p class="muted">Police notices appear here once that service is connected.</p>' :
     '<div class="grid"><div class="item"><div><div class="stat">' + day + '</div><span class="muted">in the last 24 hours</span></div></div>' +
     '<div class="item"><div><div class="stat">' + (d.length ? Math.round(night/d.length*100) : 0) + '%</div><span class="muted">happened after dark</span></div></div></div>' +
     '<div class="list">' + Object.keys(TYPES).map(k => { const n = d.filter(i => i.type === k).length;
@@ -1035,7 +1042,7 @@ function insights(tab){ tab = tab || 'trends';
 
 function layersSheet(){
   open('Map',
-    '<div class="grid" style="grid-template-columns:repeat(3,1fr)">' + Object.keys(BASES).map(k =>
+    '<div class="grid" style="grid-template-columns:repeat(2,1fr)">' + Object.keys(BASES).map(k =>
       '<button class="opt' + (k === baseKey ? ' on' : '') + '" data-act="base" data-k="' + k + '">' + BASES[k].l + '</button>').join('') + '</div>' +
     '<strong>Show on map</strong><div class="grid">' + Object.keys(TYPES).map(k =>
       '<button class="opt' + (hidden[k] ? '' : ' on') + '" data-act="filter" data-k="' + k + '" style="--c:var(--' + TYPES[k].c + ')"><b></b>' + TYPES[k].l + '</button>').join('') + '</div>');
@@ -1127,7 +1134,8 @@ let tempPin, contacts = store.get('gb_contacts', []), radius = store.get('gb_rad
 function clearTemp(){ if (tempPin){ map.removeLayer(tempPin); tempPin = null; } }
 map.on('contextmenu', e => { if (e.originalEvent) e.originalEvent.preventDefault(); placing(false); setNav('report');
   draft = {lat:e.latlng.lat, lng:e.latlng.lng, type:null}; reportForm(); });
-$('#sheetBody').addEventListener('input', e => { if (e.target.id === 'rad'){ radius = +e.target.value; store.set('gb_radius', radius); $('#radv').textContent = radius + ' km'; } });
+$('#sheetBody').addEventListener('input', e => { if (e.target.id === 'srad'){ shield.r = +e.target.value; store.set('gb_shield', shield); drawShield(); render(); $('#sradv').textContent = shield.r + ' km'; }
+  if (e.target.id === 'rad'){ radius = +e.target.value; store.set('gb_radius', radius); $('#radv').textContent = radius + ' km'; } });
 const HELP = [['Police emergency','Immediate danger','999','999'],['Police GBV line','Toll free','0800600144','0800 600 144'],
   ['BGBVC counselling','Free and confidential','14655','14655'],['BGBVC emergency line','Urgent help','+26774265081','74 265 081']];
 const gbvLabel = () => { $('#miGbv span').textContent = disguise ? 'Notes' : 'GBV support'; };
@@ -1167,11 +1175,41 @@ async function gbvRun(add){
   $('#gout').innerHTML = list.slice().reverse().map(e => '<div class="note"><strong>' + esc(e.k || 'Entry') + '</strong>, ' + esc(new Date(e.t).toLocaleString()) + '<br>' + esc(e.n) + '</div>').join('') || '<p class="muted">No records yet.</p>';
 }
 
+/* Shield: only show and list what is inside your own area */
+let shield = store.get('gb_shield', null), shieldFill, shieldEdge;
+const inShield = i => !shield || map.distance([shield.lat, shield.lng], [i.lat, i.lng]) <= shield.r * 1000;
+function drawShield(){
+  [shieldFill, shieldEdge].forEach(l => l && map.removeLayer(l)); shieldFill = shieldEdge = null;
+  $('#bShield').classList.toggle('on', !!shield);
+  if (!shield) return;
+  const c = [shield.lat, shield.lng], o = {radius:shield.r * 1000, color:'#38b6ff'};
+  shieldFill = L.circle(c, Object.assign({stroke:false, fillOpacity:.13, interactive:false}, o)).addTo(map);
+  shieldEdge = L.circle(c, Object.assign({fill:false, weight:3, dashArray:'10 9', bubblingMouseEvents:false}, o)).addTo(map)
+    .on('contextmenu click', e => { L.DomEvent.stop(e); shieldSheet(); });
+}
+function setShield(v){ shield = v; store.set('gb_shield', v); drawShield(); render(); }
+const dist = i => { const o = mePos || (shield && [shield.lat, shield.lng]); return o ? (map.distance(o, [i.lat, i.lng]) / 1000).toFixed(1) + ' km' : ''; };
+function feed(){
+  const d = shown().slice().sort((a, b) => b.time - a.time);
+  return d.length ? '<div class="list">' + d.map(i => '<button class="item" data-act="showi" data-id="' + esc(i.id) + '"><span style="display:flex;gap:10px;align-items:center"><b class="sq" style="--c:var(--' + TYPES[i.type].c + ')"></b><span><strong>' + TYPES[i.type].l + '</strong><span class="muted">' + ago(i.time) + '</span></span></span><span class="muted">' + dist(i) + '</span></button>').join('') + '</div>'
+    : '<p class="muted">' + (shield ? 'Nothing reported inside your shield.' : 'Nothing on the map yet.') + '</p>';
+}
+function shieldSheet(){
+  placing(false);
+  open('Shield', shield
+    ? '<label for="srad">Shield radius <span id="sradv">' + shield.r + ' km</span><input id="srad" type="range" min="1" max="10" value="' + shield.r + '"></label>' +
+      '<div class="row"><button class="btn soft" data-act="shMove">Move to map centre</button><button class="btn soft" data-act="shOff">Turn off</button></div>' +
+      '<strong>Inside your shield</strong>' + feed()
+    : '<p>Shield draws a perimeter around your area. The map and the feed then show only what happens inside it, and the rest of the city stays quiet.</p>' +
+      '<button class="btn" data-act="shMe">Shield around my location</button><button class="btn soft" data-act="shMap">Shield around the map centre</button>');
+}
+
 /* Events */
 $('#sheetClose').onclick = close;
 $('#bIn').onclick = () => map.zoomIn(1);
 $('#bOut').onclick = () => map.zoomOut(1);
 $('#bLocate').onclick = () => locate(true);
+$('#bShield').onclick = shieldSheet;
 $('#bLayers').onclick = () => { placing(false); layersSheet(); };
 $('#pCancel').onclick = () => { placing(false); setNav('map'); };
 $('#pMe').onclick = () => locate(true);
@@ -1209,6 +1247,10 @@ $('#sheetBody').addEventListener('click', e => {
   if (a === 'show'){ const i = mine.find(x => x.id === b.dataset.id); if (i) detail(i); }
   if (a === 'startReport') goView('report');
   if (a === 'tab') insights(k);
+  if (a === 'showi'){ const i = all().find(x => x.id === b.dataset.id); if (i) detail(i); }
+  if (a === 'shMe'){ if (!mePos){ locate(true); return toast('Finding your location. Tap again once the blue dot shows'); } setShield({lat:mePos[0], lng:mePos[1], r:radius}); shieldSheet(); map.fitBounds(shieldEdge.getBounds(), {padding:[30,30]}); }
+  if (a === 'shMap' || a === 'shMove'){ const c = map.getCenter(); setShield({lat:c.lat, lng:c.lng, r:shield ? shield.r : radius}); shieldSheet(); }
+  if (a === 'shOff'){ setShield(null); close(); toast('Shield off. Showing the whole city'); }
   if (a === 'addc'){ const n = $('#cn').value.trim(), ph = $('#cp').value.trim(); if (!n || !ph) return toast('Add a name and a phone number');
     contacts.push({n:n, p:ph}); store.set('gb_contacts', contacts); account(); $('#sheetBody').scrollTop = 1e4; }
   if (a === 'rmc'){ contacts.splice(+k, 1); store.set('gb_contacts', contacts); account(); $('#sheetBody').scrollTop = 1e4; }
@@ -1217,6 +1259,7 @@ $('#sheetBody').addEventListener('click', e => {
   if (a === 'disg'){ disguise = !disguise; store.set('gb_disg', disguise); gbvLabel(); gbv(); }
 });
 
+drawShield();
 render();
 moveInd(); addEventListener('resize', moveInd); if (document.fonts) document.fonts.ready.then(moveInd);
 setTimeout(() => { const s = $('#splash'); s.classList.add('done'); setTimeout(() => s.remove(), 900); }, 1800);
