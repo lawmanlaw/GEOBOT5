@@ -148,6 +148,12 @@ body.menu #drawer{transform:none}body.menu #scrim{opacity:1;pointer-events:auto}
 .item{color:inherit;text-decoration:none}
 input[type=range]{padding:0;background:none;accent-color:var(--blue)}
 #miGbv svg{color:var(--gbv)}
+/* Loading states: nothing under 100ms, inline on the control up to 1s, layout-matched skeleton beyond */
+.sk{pointer-events:none}.sk i{display:block;height:12px;border-radius:6px;background:var(--fill)}
+@keyframes skp{50%{opacity:.4}}
+.sk,#bLocate.busy svg{animation:skp 1.3s ease-in-out infinite}
+.btn[disabled]{opacity:.6;cursor:default}
+#map.loading{background-image:linear-gradient(var(--fill) 2px,transparent 2px),linear-gradient(90deg,var(--fill) 2px,transparent 2px);background-size:96px 96px}
 /* Start screen */
 #splash{position:fixed;inset:0;z-index:1000;background:var(--splash);display:grid;place-content:center;justify-items:center;gap:20px;transition:opacity .6s var(--ease),transform .8s var(--ease)}
 #splash.done{opacity:0;transform:scale(1.06);pointer-events:none}
@@ -271,6 +277,7 @@ function setBase(k){
   if (baseLayer) map.removeLayer(baseLayer);
   baseKey = k; store.set('gb_base', k);
   baseLayer = L.tileLayer(BASES[k].u, Object.assign({attribution:ATTR, keepBuffer:4, updateWhenZooming:false}, BASES[k].o)).addTo(map);
+  $('#map').classList.add('loading'); baseLayer.once('load', () => $('#map').classList.remove('loading'));
 }
 setBase(baseKey);
 
@@ -290,13 +297,15 @@ function render(){
 
 /* Location */
 let meMarker, meRing, mePos, watching = false, follow = false;
+const locBusy = on => { const b = $('#bLocate'); b.classList.toggle('busy', on); on ? b.setAttribute('aria-busy','true') : b.removeAttribute('aria-busy'); };
 function locate(fly){
   if (!navigator.geolocation) return toast('This browser cannot share location');
   follow = fly;
   if (mePos && fly) map.flyTo(mePos, Math.max(map.getZoom(),16), {duration:.9});
   if (watching) return;
-  watching = true; $('#bLocate').classList.add('on');
+  watching = true; $('#bLocate').classList.add('on'); locBusy(true);
   navigator.geolocation.watchPosition(p => {
+    locBusy(false);
     mePos = [p.coords.latitude, p.coords.longitude];
     const acc = p.coords.accuracy;
     if (!meMarker){
@@ -306,7 +315,7 @@ function locate(fly){
     } else { meMarker.setLatLng(mePos); meRing.setLatLng(mePos).setRadius(acc); }
     if (follow){ follow = false; map.flyTo(mePos, Math.max(map.getZoom(),16), {duration:.9}); }
   }, e => {
-    watching = false; $('#bLocate').classList.remove('on');
+    locBusy(false); watching = false; $('#bLocate').classList.remove('on');
     toast(e.code === 1 ? 'Location is blocked. Allow it in your browser settings' : 'Could not get your location. Try again outdoors');
   }, {enableHighAccuracy:true, maximumAge:0, timeout:20000});
 }
@@ -419,14 +428,16 @@ function searchSheet(){
   open('Search', (hits.length ? '<div class="list">' + hits.map(x => '<button class="item" data-act="go" data-k="' + x[1] + '"><strong>' + x[0][0] + '</strong><span class="muted">' + km(x[0][1],x[0][2]) + '</span></button>').join('') + '</div>'
     : '<p class="muted">No saved place matches. Press Enter to search all of Botswana.</p>'));
 }
+const SKEL = '<div class="list" aria-busy="true">' + [58,44,66,50].map(w => '<div class="item sk"><i style="width:' + w + '%"></i><i style="width:12%"></i></div>').join('') + '</div>';
 async function geocode(){
   const q = $('#q').value.trim(); if (!q) return;
+  const sk = setTimeout(() => open('Search', SKEL), 100);
   try {
     const res = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=6&countrycodes=bw&q=' + encodeURIComponent(q));
-    const d = await res.json();
+    const d = await res.json(); clearTimeout(sk);
     open('Search', d.length ? '<div class="list">' + d.map(x => '<button class="item" data-act="goto" data-lat="' + esc(x.lat) + '" data-lng="' + esc(x.lon) + '"><strong>' + esc(x.display_name.split(',').slice(0,2).join(',')) + '</strong><span class="muted">' + km(+x.lat,+x.lon) + '</span></button>').join('') + '</div>'
       : '<p class="muted">Nothing found for that search. Try a street or area name.</p>');
-  } catch(e){ toast('Search is unavailable right now. Check your connection'); }
+  } catch(e){ clearTimeout(sk); searchSheet(); toast('Search is unavailable right now. Check your connection'); }
 }
 function reportsSheet(){
   open('My reports', mine.length ? '<div class="list">' + mine.slice().reverse().map(i => '<button class="item" data-act="show" data-id="' + esc(i.id) + '"><span><strong>' + TYPES[i.type].l + '</strong><span class="muted">' + ago(i.time) + '</span></span></button>').join('') + '</div>'
@@ -475,7 +486,12 @@ async function seal(pin, obj){ const salt = crypto.getRandomValues(new Uint8Arra
   const ct = await crypto.subtle.encrypt({name:'AES-GCM', iv:iv}, await pinKey(pin, salt), new TextEncoder().encode(JSON.stringify(obj)));
   return {s:b64(salt), i:b64(iv), c:b64(ct)}; }
 async function unseal(pin, v){ return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM', iv:unb(v.i)}, await pinKey(pin, unb(v.s)), unb(v.c)))); }
-async function gbvDo(add){
+async function gbvDo(add, btn){
+  const t = setTimeout(() => { btn.dataset.l = btn.textContent; btn.textContent = add ? 'Sealing…' : 'Opening…'; }, 100);
+  btn.disabled = true; btn.setAttribute('aria-busy', 'true');
+  try { await gbvRun(add); } finally { clearTimeout(t); btn.disabled = false; btn.removeAttribute('aria-busy'); if (btn.dataset.l){ btn.textContent = btn.dataset.l; delete btn.dataset.l; } }
+}
+async function gbvRun(add){
   if (!window.crypto || !crypto.subtle) return toast('Sealed records only work on the hosted app, not in this view');
   const pin = $('#gp').value; if (pin.length < 4) return toast('Enter a PIN of at least 4 digits');
   let list = []; const cur = store.get('gb_sealed', null);
@@ -532,7 +548,7 @@ $('#sheetBody').addEventListener('click', e => {
     contacts.push({n:n, p:ph}); store.set('gb_contacts', contacts); account(); $('#sheetBody').scrollTop = 1e4; }
   if (a === 'rmc'){ contacts.splice(+k, 1); store.set('gb_contacts', contacts); account(); $('#sheetBody').scrollTop = 1e4; }
   if (a === 'exit') close();
-  if (a === 'seal' || a === 'unseal') gbvDo(a === 'seal');
+  if (a === 'seal' || a === 'unseal') gbvDo(a === 'seal', b);
   if (a === 'disg'){ disguise = !disguise; store.set('gb_disg', disguise); gbvLabel(); gbv(); }
 });
 
