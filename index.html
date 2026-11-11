@@ -1,0 +1,539 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>GeoBots</title>
+<meta name="description" content="Community crime map for Gaborone">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: the map is the whole screen. Everything else is glass floating over it. */
+:root{
+  --ink:#10151c; --muted:#5b6370; --blue:#0f5bd6; --red:#e5332a; --amber:#e08a00; --violet:#7a4be0; --gbv:#6b4fa0;
+  --glass:rgba(255,255,255,.64); --glass-strong:rgba(255,255,255,.82); --fill:rgba(16,21,28,.06);
+  --shine:inset 0 1px 0 rgba(255,255,255,.75), 0 12px 32px rgba(16,24,40,.18);
+  --blur:blur(22px) saturate(180%);
+  --ease:cubic-bezier(.22,1,.36,1); --spring:cubic-bezier(.3,1.4,.5,1); --splash:#f3f6f9;
+  --font:"Outfit",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+@media (prefers-color-scheme:dark){:root{
+  --ink:#f2f4f7; --muted:#a3acb9; --blue:#5b9bff; --glass:rgba(22,26,34,.62); --glass-strong:rgba(22,26,34,.84);
+  --fill:rgba(255,255,255,.09); --splash:#0e1116; --shine:inset 0 1px 0 rgba(255,255,255,.14), 0 12px 32px rgba(0,0,0,.45);
+}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0}
+body{font:15px/1.45 var(--font);color:var(--ink);background:#dfe5ea;overflow:hidden}
+button,input,select,textarea{font:inherit;color:inherit}
+button{border:0;background:none;cursor:pointer;padding:0}
+button:focus,input:focus,select:focus,textarea:focus{outline:none}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+h1,h2,h3,p{margin:0}
+[hidden]{display:none!important}
+.glass{background:var(--glass);-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);box-shadow:var(--shine)}
+
+#map{position:fixed;inset:0;background:#dfe5ea;z-index:0}
+.leaflet-container{font-family:var(--font)}
+.leaflet-control-attribution{background:var(--glass)!important;-webkit-backdrop-filter:var(--blur);backdrop-filter:var(--blur);border-radius:8px 0 0 0;color:var(--muted)!important;font-size:10px}
+.leaflet-control-attribution a{color:var(--muted)!important}
+
+/* Pins: a zero-size anchor sits exactly on the coordinate, every layer is centred on it */
+.pin{position:absolute;left:0;top:0;width:0;height:0}
+.pin i{position:absolute;left:0;top:0;border-radius:50%;transform:translate(-50%,-50%)}
+.pin .glow{width:120px;height:120px;pointer-events:none;background:radial-gradient(circle,var(--c) 0,color-mix(in srgb,var(--c) 45%,transparent) 28%,transparent 68%);opacity:.5}
+.pin .ring{width:120px;height:120px;pointer-events:none;box-shadow:inset 0 0 0 2px var(--c);animation:ring 2.4s var(--ease) infinite;opacity:0}
+.pin .dot{width:16px;height:16px;background:var(--c);box-shadow:0 0 0 3px #fff,0 2px 8px rgba(0,0,0,.35);cursor:pointer;transition:transform .2s var(--ease)}
+.pin .dot:hover{transform:translate(-50%,-50%) scale(1.25)}
+.pin.red{--c:var(--red)}.pin.amber{--c:var(--amber)}.pin.violet{--c:var(--violet)}
+.pin.me{--c:var(--blue)}.pin.me .glow,.pin.me .ring{width:56px;height:56px}
+@keyframes ring{0%{transform:translate(-50%,-50%) scale(.15);opacity:.9}100%{transform:translate(-50%,-50%) scale(1);opacity:0}}
+
+/* Top bar and controls */
+#top{position:fixed;z-index:500;left:max(12px,env(safe-area-inset-left));top:max(12px,env(safe-area-inset-top));display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:18px}
+#top h1{font-size:17px;font-weight:700}
+#top span{color:var(--muted);font-size:13px}
+#ctl{position:fixed;z-index:500;right:max(12px,env(safe-area-inset-right));top:max(12px,env(safe-area-inset-top));display:flex;flex-direction:column;gap:8px}
+#ctl button{width:46px;height:46px;border-radius:15px;display:grid;place-items:center;font-size:22px;font-weight:500;transition:transform .18s var(--ease)}
+#ctl button:active,.btn:active,nav button:active{transform:scale(.94)}
+#ctl button.on{color:var(--blue)}
+svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+/* Navigation */
+nav{position:fixed;z-index:600;left:50%;bottom:max(12px,env(safe-area-inset-bottom));transform:translateX(-50%);display:flex;gap:2px;padding:6px;border-radius:24px}
+nav button{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:62px;padding:8px 6px;border-radius:18px;font-size:11px;font-weight:600;color:var(--muted);transition:background .25s var(--ease),color .25s,transform .18s var(--ease)}
+nav button{position:relative;z-index:1}
+nav button.on{color:var(--blue)}
+.ind{position:absolute;left:0;top:0;z-index:0;border-radius:18px;background:var(--glass-strong);box-shadow:inset 0 1px 0 rgba(255,255,255,.55),0 4px 14px rgba(16,24,40,.14);pointer-events:none;transition:transform .55s var(--spring),width .4s var(--ease),height .4s var(--ease);will-change:transform}
+nav button.sos{color:var(--red)}
+
+/* Sheet */
+#sheet{position:fixed;z-index:550;left:10px;right:10px;bottom:calc(max(12px,env(safe-area-inset-bottom)) + 76px);max-height:66vh;border-radius:24px;display:flex;flex-direction:column;transform:translateY(24px);opacity:0;pointer-events:none;transition:transform .42s var(--ease),opacity .28s}
+#sheet.open{transform:none;opacity:1;pointer-events:auto}
+#sheet header{display:flex;align-items:center;justify-content:space-between;padding:16px 18px 6px}
+#sheet h2{font-size:19px;font-weight:700}
+#sheetBody{padding:8px 18px 18px;overflow:auto;display:flex;flex-direction:column;gap:14px}
+.x{width:34px;height:34px;border-radius:50%;background:var(--fill);display:grid;place-items:center}
+.x svg{width:16px;height:16px}
+.muted{color:var(--muted);font-size:13px}
+.btn{display:block;width:100%;padding:14px;border-radius:16px;font-weight:700;text-align:center;background:var(--blue);color:#fff;transition:transform .18s var(--ease)}
+.btn.soft{background:var(--fill);color:var(--ink)}
+.btn.red{background:var(--red)}
+.row{display:flex;gap:10px}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.opt{padding:12px;border-radius:14px;background:var(--fill);font-weight:600;text-align:left;display:flex;align-items:center;gap:8px;transition:background .2s,color .2s}
+.opt b{width:10px;height:10px;border-radius:50%;background:var(--c);flex:none}
+.opt.on{background:var(--ink);color:var(--glass-strong)}
+label{display:flex;flex-direction:column;gap:6px;font-weight:600;font-size:13px}
+input,select,textarea{padding:12px;border-radius:14px;border:0;background:var(--fill);font-size:15px;font-weight:500;width:100%}
+textarea{resize:none;height:76px}
+.list{display:flex;flex-direction:column;gap:8px}
+.item{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border-radius:14px;background:var(--fill);text-align:left;width:100%}
+.item strong{display:block}
+.bar{height:8px;border-radius:4px;background:var(--fill);overflow:hidden}
+.bar i{display:block;height:100%;border-radius:4px;background:var(--c,var(--blue));transition:width .6s var(--ease)}
+.stat{font-size:30px;font-weight:700;line-height:1.1}
+.note{padding:12px 14px;border-radius:14px;background:var(--fill);font-size:13px}
+.hold{position:relative;width:168px;height:168px;border-radius:50%;margin:6px auto;background:var(--red);color:#fff;font-size:26px;font-weight:700;display:grid;place-items:center;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+.hold::after{content:"";position:absolute;inset:0;border-radius:50%;background:rgba(255,255,255,.28);transform:scale(0);transition:transform .2s}
+.hold.on::after{transform:scale(1);transition:transform 1.5s linear}
+.hold span{position:relative;z-index:1}
+
+/* Placing a pin: crosshair locked to the exact centre of the map */
+#cross{position:fixed;z-index:400;left:50%;top:50%;width:34px;height:34px;border-radius:50%;transform:translate(-50%,-50%);box-shadow:0 0 0 2px #fff,0 0 0 4px var(--red),0 4px 14px rgba(0,0,0,.3);pointer-events:none}
+#cross::after{content:"";position:absolute;left:50%;top:50%;width:6px;height:6px;border-radius:50%;background:var(--red);transform:translate(-50%,-50%)}
+#placer{position:fixed;z-index:560;left:10px;right:10px;bottom:calc(max(12px,env(safe-area-inset-bottom)) + 76px);padding:16px;border-radius:24px;display:flex;flex-direction:column;gap:12px}
+#toast{position:fixed;z-index:700;left:50%;top:max(72px,calc(env(safe-area-inset-top) + 72px));transform:translate(-50%,-12px);padding:10px 16px;border-radius:14px;font-weight:600;font-size:14px;opacity:0;pointer-events:none;transition:opacity .25s,transform .35s var(--ease);max-width:calc(100vw - 32px);text-align:center}
+#toast.show{opacity:1;transform:translate(-50%,0)}
+
+/* Touch response: everything presses in and springs back */
+.opt,.item,.x,.btn,#ctl button,nav button{transition:transform .3s var(--spring),background .25s,color .25s}
+.opt:active,.item:active,.x:active,.btn:active,#ctl button:active,nav button:active{transform:scale(.95);transition-duration:.08s}
+#sheetBody.in>*{animation:rise .5s var(--ease) both}
+#sheetBody.in>:nth-child(2){animation-delay:.04s}#sheetBody.in>:nth-child(3){animation-delay:.08s}#sheetBody.in>:nth-child(n+4){animation-delay:.12s}
+@keyframes rise{from{opacity:0;transform:translateY(12px)}}
+#top .logo{width:12px;height:12px;border-radius:50%;background:var(--blue);box-shadow:0 0 0 4px color-mix(in srgb,var(--blue) 25%,transparent)}
+/* Top search bar, menu drawer, welcome, centre report button */
+#top{padding:5px;gap:4px;right:calc(max(12px,env(safe-area-inset-right)) + 56px);border-radius:26px}
+#q{flex:1;min-width:0;background:none;padding:8px 6px;font-weight:500}
+#q::placeholder{color:var(--muted)}
+#top .x{flex:none;width:40px;height:40px}#top .x svg{width:20px;height:20px}
+@media (min-width:900px){#top{right:auto;width:380px}}
+nav button.fab{min-width:54px;width:54px;height:54px;padding:0;border-radius:50%;align-self:center;justify-content:center;margin:0 4px;background:var(--blue);color:#fff;box-shadow:0 6px 16px color-mix(in srgb,var(--blue) 45%,transparent)}
+nav button.fab svg{width:26px;height:26px;stroke-width:2.2}
+.ind{transition:transform .55s var(--spring),width .4s var(--ease),height .4s var(--ease),opacity .2s}
+@media (min-width:900px){nav button.fab{margin:4px 0}}
+#scrim{position:fixed;inset:0;z-index:790;background:rgba(8,12,20,.38);opacity:0;pointer-events:none;transition:opacity .35s}
+#drawer{position:fixed;z-index:800;left:0;top:0;bottom:0;width:min(330px,86vw);padding:calc(env(safe-area-inset-top) + 20px) 14px calc(env(safe-area-inset-bottom) + 16px);display:flex;flex-direction:column;gap:4px;border-radius:0 28px 28px 0;transform:translateX(-105%);transition:transform .5s var(--ease)}
+body.menu #drawer{transform:none}body.menu #scrim{opacity:1;pointer-events:auto}
+.who{display:flex;align-items:center;gap:12px;padding:6px 8px 16px;text-align:left}
+.who i{width:48px;height:48px;border-radius:50%;background:var(--blue);color:#fff;display:grid;place-items:center;flex:none}
+.who strong{display:block;font-size:18px}
+.mi{display:flex;align-items:center;gap:14px;padding:13px 10px;border-radius:14px;font-size:16px;font-weight:500;text-align:left;transition:background .2s,transform .3s var(--spring)}
+.mi:hover{background:var(--fill)}.mi:active{transform:scale(.97)}.mi svg{color:var(--muted)}
+#drawer .btn{margin-top:auto}
+.btn.ink{background:var(--ink);color:var(--splash)}
+.ck{opacity:0;color:var(--blue);font-weight:700;transition:opacity .2s}.item.on .ck{opacity:1}
+#welcome{position:fixed;inset:0;z-index:900;display:flex;align-items:flex-end;background:linear-gradient(rgba(8,12,20,.15),rgba(8,12,20,.95) 66%),url(hero.jpg) center/cover;color:#fff;padding:28px max(22px,env(safe-area-inset-left)) calc(env(safe-area-inset-bottom) + 28px);transition:opacity .5s var(--ease)}
+#welcome.done{opacity:0;pointer-events:none}
+#welcome div{max-width:440px;display:flex;flex-direction:column;gap:14px}
+#welcome h2{font-size:clamp(34px,9vw,46px);line-height:1.05;font-weight:700;text-wrap:balance}
+#welcome p{color:rgba(255,255,255,.78);font-size:16px}
+#welcome .ghost{color:#fff;font-weight:600;padding:10px}
+.resp{flex-direction:column;align-items:stretch;gap:8px;padding:6px 6px 10px;text-align:center}
+.resp img{width:100%;aspect-ratio:1;object-fit:cover;object-position:top;border-radius:10px;background:#fff;display:block}
+.item{color:inherit;text-decoration:none}
+input[type=range]{padding:0;background:none;accent-color:var(--blue)}
+#miGbv svg{color:var(--gbv)}
+/* Start screen */
+#splash{position:fixed;inset:0;z-index:1000;background:var(--splash);display:grid;place-content:center;justify-items:center;gap:22px;transition:opacity .6s var(--ease),transform .8s var(--ease)}
+#splash.done{opacity:0;transform:scale(1.08);pointer-events:none}
+#splash .mark{position:relative;width:96px;height:96px}
+#splash .mark *{position:absolute;left:50%;top:50%;border-radius:50%}
+#splash .mark b{width:26px;height:26px;margin:-13px;background:var(--blue);box-shadow:0 0 0 5px var(--splash),0 0 0 7px var(--blue);animation:pop .7s var(--spring) both}
+#splash .mark i{width:96px;height:96px;margin:-48px;box-shadow:inset 0 0 0 2px var(--blue);opacity:0;animation:wave 1.3s var(--ease) .25s both}
+#splash .mark i+i{animation-delay:.55s}
+#splash h1{font-size:30px;font-weight:700;animation:rise .7s var(--ease) .35s both}
+@keyframes pop{from{transform:scale(0)}}
+@keyframes wave{0%{transform:scale(.2);opacity:.9}100%{transform:scale(1.25);opacity:0}}
+@media (max-width:899px){.leaflet-bottom{bottom:80px}}
+@media (min-width:900px){
+  nav{left:16px;top:50%;bottom:auto;transform:translateY(-50%);flex-direction:column}
+  #top{left:112px}
+  #sheet,#placer{left:112px;right:auto;width:380px;bottom:16px}
+  #sheet{top:76px;max-height:none;transform:translateX(-24px)}
+  #placer{bottom:16px}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div id="splash"><div class="mark"><i></i><i></i><b></b></div><h1>GeoBots</h1></div>
+<div id="map"></div>
+
+<div id="top" class="glass"><button class="x" id="bMenu" aria-label="Menu"><svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button><input id="q" type="search" placeholder="Search a place in Gaborone" aria-label="Search a place" autocomplete="off"><span id="count" hidden></span></div>
+<div id="scrim"></div>
+<aside id="drawer" class="glass" aria-label="Menu">
+  <button class="who" data-go="account"><i><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg></i><span><strong>Guest</strong><span class="muted">Sign in to keep your reports</span></span></button>
+  <button class="mi" data-go="reports"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>My reports</button>
+  <button class="mi" data-go="insights"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Insights</button>
+  <button class="mi" data-go="thusa"><svg viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.500 8 8 9 4.500-1 8-4 8-9V6l-8-3Z"/><path d="m9 12 2 2 4-4"/></svg>Safety and Thusa!</button>
+  <button class="mi" data-go="gbv" id="miGbv"><svg viewBox="0 0 24 24"><path d="M12 20s-7-4.500-7-10a4 4 0 0 1 7-2.500A4 4 0 0 1 19 10c0 5.500-7 10-7 10Z"/></svg><span>GBV support</span></button>
+  <button class="mi" data-go="plans"><svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M3 10h18"/></svg>Plans and payment</button>
+  <button class="mi" data-go="layers"><svg viewBox="0 0 24 24"><path d="M12 3 3 8l9 5 9-5-9-5ZM3 13l9 5 9-5"/></svg>Map style and filters</button>
+  <button class="btn" data-go="report">Report an incident</button>
+</aside>
+<div id="welcome" hidden><div><h2>See what is happening on your streets</h2><p>Community reports for Gaborone, pinned to the exact spot. Press and hold the map to pin an incident.</p><button class="btn" id="wGo">Open the map</button><button class="ghost" id="wLoc">Start from my location</button></div></div>
+
+<div id="ctl">
+  <button class="glass" id="bLayers" aria-label="Map style and filters"><svg viewBox="0 0 24 24"><path d="M12 3 3 8l9 5 9-5-9-5ZM3 13l9 5 9-5"/></svg></button>
+  <button class="glass" id="bLocate" aria-label="Show my location"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg></button>
+  <button class="glass" id="bIn" aria-label="Zoom in">+</button>
+  <button class="glass" id="bOut" aria-label="Zoom out">&minus;</button>
+</div>
+
+<div id="cross" hidden></div>
+<div id="placer" class="glass" hidden>
+  <div><strong>Move the map under the marker</strong><p class="muted">The pin lands on the exact centre point.</p></div>
+  <button class="btn" id="pHere">Pin here</button>
+  <div class="row"><button class="btn soft" id="pMe">Use my location</button><button class="btn soft" id="pCancel">Cancel</button></div>
+</div>
+
+<section id="sheet" class="glass" aria-live="polite">
+  <header><h2 id="sheetTitle"></h2><button class="x" id="sheetClose" aria-label="Close"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></header>
+  <div id="sheetBody"></div>
+</section>
+
+<nav class="glass">
+  <i class="ind"></i>
+  <button data-view="map" class="on"><svg viewBox="0 0 24 24"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2ZM9 4v14M15 6v14"/></svg>Map</button>
+  <button data-view="insights"><svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>Insights</button>
+  <button data-view="report" class="fab" aria-label="Report an incident"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
+  <button data-view="thusa" class="sos"><svg viewBox="0 0 24 24"><path d="M12 3 2 20h20L12 3ZM12 10v4M12 17h.01"/></svg>Thusa!</button>
+  <button data-view="account"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/></svg>Account</button>
+</nav>
+
+<div id="toast" class="glass"></div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const store = {
+  get(k, d){ try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch(e){ return d; } },
+  set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(e){} }
+};
+const H = 3600e3, now = Date.now();
+
+const TYPES = {
+  robbery:{l:'Robbery',c:'red'}, assault:{l:'Assault',c:'red'},
+  burglary:{l:'House breaking',c:'amber'}, vehicle:{l:'Vehicle theft',c:'amber'}, theft:{l:'Theft',c:'amber'},
+  suspicious:{l:'Suspicious activity',c:'violet'}
+};
+// Example incidents so the map is not empty. Not real reports.
+const SAMPLES = [
+  ['robbery',-24.6553,25.9086,2,'Phone snatched near the mall walkway'],
+  ['theft',-24.6570,25.9110,5,'Bag taken at the bus rank'],
+  ['burglary',-24.6280,25.9290,9,'Break in while the house was empty'],
+  ['vehicle',-24.6895,25.8830,14,'Car taken from the parking area'],
+  ['suspicious',-24.6600,25.9320,20,'Group checking car doors'],
+  ['assault',-24.6830,25.9030,26,'Fight outside a bar'],
+  ['burglary',-24.6050,25.9450,40,'Window forced at night'],
+  ['theft',-24.6590,25.8870,52,'Laptop taken from a car'],
+  ['robbery',-24.6335,25.9160,70,'Robbery at a tuck shop'],
+  ['suspicious',-24.6480,25.8990,96,'Car circling the street slowly']
+].map((s,i)=>({id:'s'+i,type:s[0],lat:s[1],lng:s[2],time:now-s[3]*H,note:s[4],sample:true}));
+
+let mine = store.get('gb_reports', []);
+let hidden = store.get('gb_hidden', {});
+let draft = null, view = 'map';
+
+/* Map */
+const BASES = {
+  standard:{l:'Standard', u:'https://tile.openstreetmap.org/{z}/{x}/{y}.png', o:{maxZoom:19}},
+  human:{l:'Humanitarian', u:'https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png', o:{maxZoom:19}},
+  terrain:{l:'Terrain', u:'https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', o:{maxZoom:19,maxNativeZoom:17}}
+};
+const ATTR = '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors';
+const map = L.map('map', {
+  center:[-24.6460,25.9120], zoom:13, minZoom:5, maxZoom:19,
+  zoomControl:false, zoomSnap:.25, zoomDelta:1, wheelPxPerZoomLevel:110, wheelDebounceTime:20,
+  inertia:true, inertiaDeceleration:2200, easeLinearity:.2, tapTolerance:12, bounceAtZoomLimits:false, tapHold:true
+});
+map.attributionControl.setPrefix(false);
+let baseKey = store.get('gb_base','standard'), baseLayer;
+function setBase(k){
+  if (!BASES[k]) k = 'standard';
+  if (baseLayer) map.removeLayer(baseLayer);
+  baseKey = k; store.set('gb_base', k);
+  baseLayer = L.tileLayer(BASES[k].u, Object.assign({attribution:ATTR, keepBuffer:4, updateWhenZooming:false}, BASES[k].o)).addTo(map);
+}
+setBase(baseKey);
+
+const pinIcon = (cls, ring) => L.divIcon({className:'', iconSize:[0,0], iconAnchor:[0,0],
+  html:'<div class="pin '+cls+'"><i class="glow"></i>'+(ring?'<i class="ring"></i>':'')+'<i class="dot"></i></div>'});
+const layer = L.layerGroup().addTo(map);
+const all = () => SAMPLES.concat(mine);
+const shown = () => all().filter(i => !hidden[i.type]);
+function render(){
+  layer.clearLayers();
+  shown().forEach(i => {
+    const recent = now - i.time < 12*H || !i.sample;
+    L.marker([i.lat,i.lng], {icon:pinIcon(TYPES[i.type].c, recent), keyboard:false}).on('click', () => detail(i)).addTo(layer);
+  });
+  $('#count').textContent = shown().length + ' incidents';
+}
+
+/* Location */
+let meMarker, meRing, mePos, watching = false, follow = false;
+function locate(fly){
+  if (!navigator.geolocation) return toast('This browser cannot share location');
+  follow = fly;
+  if (mePos && fly) map.flyTo(mePos, Math.max(map.getZoom(),16), {duration:.9});
+  if (watching) return;
+  watching = true; $('#bLocate').classList.add('on');
+  navigator.geolocation.watchPosition(p => {
+    mePos = [p.coords.latitude, p.coords.longitude];
+    const acc = p.coords.accuracy;
+    if (!meMarker){
+      meRing = L.circle(mePos, {radius:acc, color:'#0f5bd6', weight:1, fillOpacity:.1, interactive:false}).addTo(map);
+      meMarker = L.marker(mePos, {icon:pinIcon('me', true), interactive:false, zIndexOffset:1000}).addTo(map);
+      toast('Location found, accurate to about ' + Math.round(acc) + ' m');
+    } else { meMarker.setLatLng(mePos); meRing.setLatLng(mePos).setRadius(acc); }
+    if (follow){ follow = false; map.flyTo(mePos, Math.max(map.getZoom(),16), {duration:.9}); }
+  }, e => {
+    watching = false; $('#bLocate').classList.remove('on');
+    toast(e.code === 1 ? 'Location is blocked. Allow it in your browser settings' : 'Could not get your location. Try again outdoors');
+  }, {enableHighAccuracy:true, maximumAge:0, timeout:20000});
+}
+
+/* Sheet */
+function open(title, html){ if (title !== 'Report an incident') clearTemp(); const fresh = $('#sheetTitle').textContent !== title || !$('#sheet').classList.contains('open'), sb = $('#sheetBody');
+  if (fresh){ sb.classList.remove('in'); void sb.offsetWidth; sb.classList.add('in'); } else sb.classList.remove('in');
+  $('#sheetTitle').textContent = title; $('#sheetBody').innerHTML = html; $('#sheet').classList.add('open'); }
+function close(){ clearTemp(); $('#sheet').classList.remove('open'); setNav('map'); }
+function setNav(v){ view = v; document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.view === v)); moveInd(); }
+function moveInd(){ const b = document.querySelector('nav button.on'), i = document.querySelector('.ind'); if (!b) return;
+  i.style.opacity = b.classList.contains('fab') ? 0 : 1; i.style.width = b.offsetWidth + 'px'; i.style.height = b.offsetHeight + 'px'; i.style.transform = 'translate(' + b.offsetLeft + 'px,' + b.offsetTop + 'px)'; }
+let tT; function toast(m){ const t = $('#toast'); t.textContent = m; t.classList.add('show'); clearTimeout(tT); tT = setTimeout(() => t.classList.remove('show'), 3200); }
+function ago(t){ const h = (Date.now()-t)/H; return h < 1 ? Math.max(1,Math.round(h*60)) + ' min ago' : h < 24 ? Math.round(h) + ' h ago' : Math.round(h/24) + ' d ago'; }
+const placing = on => { $('#cross').hidden = !on; $('#placer').hidden = !on; };
+
+function detail(i){
+  placing(false);
+  open(TYPES[i.type].l,
+    '<p class="muted">' + ago(i.time) + (i.sample ? ' · example incident' : ' · your report') + '</p>' +
+    (i.note ? '<p>' + esc(i.note) + '</p>' : '') +
+    '<p class="muted">' + i.lat.toFixed(5) + ', ' + i.lng.toFixed(5) + '</p>' +
+    (i.sample ? '' : '<button class="btn soft" data-act="del" data-id="' + esc(i.id) + '">Remove my report</button>'));
+  map.flyTo([i.lat,i.lng], Math.max(map.getZoom(),15), {duration:.7});
+}
+
+function reportForm(){
+  clearTemp(); tempPin = L.marker([draft.lat, draft.lng], {icon:pinIcon('red', true), interactive:false}).addTo(map);
+  if (innerWidth < 900){ const y = map.latLngToContainerPoint([draft.lat, draft.lng]).y; map.panBy([0, y - innerHeight * .16], {animate:true, duration:.5}); }
+  open('Report an incident',
+    '<p class="muted">Pinned at ' + draft.lat.toFixed(5) + ', ' + draft.lng.toFixed(5) + '</p>' +
+    '<div class="grid" id="typeGrid">' + Object.keys(TYPES).map(k =>
+      '<button class="opt" data-act="type" data-k="' + k + '" style="--c:var(--' + TYPES[k].c + ')"><b></b>' + TYPES[k].l + '</button>').join('') + '</div>' +
+    '<label for="when">When did it happen<select id="when"><option value="0">Just now</option><option value="1">Within the last hour</option><option value="6">Earlier today</option><option value="24">Yesterday</option></select></label>' +
+    '<label for="note">What happened (optional)<textarea id="note" maxlength="240"></textarea></label>' +
+    '<button class="btn" data-act="post">Post report</button>' +
+    '<p class="muted">Saved on this device for now. Do not include names of people.</p>');
+}
+
+function insights(tab){ tab = tab || 'trends';
+  const d = shown(), max = Math.max(1, ...Object.keys(TYPES).map(k => d.filter(i => i.type === k).length));
+  const seg = '<div class="grid" style="grid-template-columns:repeat(3,1fr)">' + ['trends','wanted','missing'].map(k => '<button class="opt' + (k === tab ? ' on' : '') + '" data-act="tab" data-k="' + k + '" style="justify-content:center;text-transform:capitalize">' + k + '</button>').join('') + '</div>';
+  const day = d.filter(i => Date.now()-i.time < 24*H).length;
+  const night = d.filter(i => { const h = new Date(i.time).getHours(); return h >= 19 || h < 6; }).length;
+  open('Insights', seg + (tab !== 'trends' ? '<p>No ' + tab + ' notices yet.</p><p class="muted">Police notices appear here once that service is connected.</p>' :
+    '<div class="grid"><div class="item"><div><div class="stat">' + day + '</div><span class="muted">in the last 24 hours</span></div></div>' +
+    '<div class="item"><div><div class="stat">' + (d.length ? Math.round(night/d.length*100) : 0) + '%</div><span class="muted">happened after dark</span></div></div></div>' +
+    '<div class="list">' + Object.keys(TYPES).map(k => { const n = d.filter(i => i.type === k).length;
+      return '<div><div class="row" style="justify-content:space-between"><span>' + TYPES[k].l + '</span><strong>' + n + '</strong></div><div class="bar" style="--c:var(--' + TYPES[k].c + ')"><i style="width:' + (n/max*100) + '%"></i></div></div>'; }).join('') + '</div>' +
+    '<p class="muted">Based on what is on the map now, including example incidents.</p>'));
+}
+
+function layersSheet(){
+  open('Map',
+    '<div class="grid" style="grid-template-columns:repeat(3,1fr)">' + Object.keys(BASES).map(k =>
+      '<button class="opt' + (k === baseKey ? ' on' : '') + '" data-act="base" data-k="' + k + '">' + BASES[k].l + '</button>').join('') + '</div>' +
+    '<strong>Show on map</strong><div class="grid">' + Object.keys(TYPES).map(k =>
+      '<button class="opt' + (hidden[k] ? '' : ' on') + '" data-act="filter" data-k="' + k + '" style="--c:var(--' + TYPES[k].c + ')"><b></b>' + TYPES[k].l + '</button>').join('') + '</div>');
+}
+
+function thusa(){
+  open('Thusa!',
+    '<p>Hold the button for two seconds to raise an alert with your location.</p>' +
+    '<div class="grid" style="grid-template-columns:repeat(3,1fr)">' + ['Police','Ambulance','Security'].map((n,i) => '<button class="opt resp' + (i ? '' : ' on') + '" data-act="pick"><img alt="" src="' + IMG[n] + '">' + n + '</button>').join('') + '</div>' +
+    '<button class="hold" id="hold" aria-label="Hold to send alert"><span>Hold</span></button>' +
+    '<div class="note" id="thusaMsg"><strong>Not live yet.</strong> No responder is connected, so this button does not send anything. In an emergency call the numbers below.</div>' +
+    '<div class="list"><div class="item"><strong>Police</strong><strong>999</strong></div><div class="item"><strong>Ambulance</strong><strong>997</strong></div><div class="item"><strong>Fire</strong><strong>998</strong></div></div>');
+  const b = $('#hold'); let t;
+  const stop = () => { clearTimeout(t); b.classList.remove('on'); };
+  b.addEventListener('pointerdown', () => { b.classList.add('on'); t = setTimeout(() => { stop(); locate(true);
+    $('#thusaMsg').innerHTML = '<strong>Test complete, nothing was sent.</strong> Once responders are connected, this is where your alert and live location go out.'; }, 1500); });
+  ['pointerup','pointerleave','pointercancel'].forEach(e => b.addEventListener(e, stop));
+}
+
+const IMG = {Police:'police.jpg',Ambulance:'ambulance.jpg',Security:'security.jpg'};
+const PLANS = [
+  {k:'motse', n:'Motse', p:'Free', f:'Live crime map, report incidents, hotspots'},
+  {k:'tsela', n:'Tsela', p:'P25 a month', f:'Alerts near you and family, trusted contacts'},
+  {k:'sireletsa', n:'Sireletsa', p:'P50 a month', f:'Thusa! panic button, private response, priority 999 routing'}
+];
+function account(){
+  open('Account',
+    '<form id="signin" class="list"><div class="grid"><label for="fn">First name<input id="fn" autocomplete="given-name"></label><label for="ln">Last name<input id="ln" autocomplete="family-name"></label></div><label for="email">Email address<input id="email" type="email" autocomplete="email" placeholder="you@example.com" required></label>' +
+    '<button class="btn ink" type="submit">Email me a sign in code</button><p class="muted" id="signMsg"></p></form>' +
+    '<strong>Plans</strong><div class="list">' + PLANS.map(p =>
+      '<button class="item" data-act="plan" data-k="' + p.k + '"><span><strong>' + p.n + '</strong><span class="muted">' + p.f + '</span></span><strong style="white-space:nowrap">' + p.p + '</strong></button>').join('') + '</div>' +
+    '<strong>Trusted contacts</strong><div class="list">' + (contacts.map((c,i) => '<div class="item"><span><strong>' + esc(c.n) + '</strong><span class="muted">' + esc(c.p) + '</span></span><button class="x" data-act="rmc" data-k="' + i + '" aria-label="Remove contact"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>').join('') || '<p class="muted">People to alert when you use Thusa!</p>') + '</div>' +
+    '<div class="grid"><label for="cn">Name<input id="cn" maxlength="40"></label><label for="cp">Phone<input id="cp" type="tel" inputmode="tel" maxlength="16"></label></div><button class="btn soft" data-act="addc">Add contact</button>' +
+    '<label for="rad">Alert me within <span id="radv">' + radius + ' km</span><input id="rad" type="range" min="1" max="10" value="' + radius + '"></label>');
+  $('#signin').addEventListener('submit', e => { e.preventDefault();
+    $('#signMsg').textContent = 'Sign in codes are not connected yet. That is the next build step, with the database.'; });
+}
+function pay(k){
+  const p = PLANS.find(x => x.k === k);
+  if (p.k === 'motse') return toast('Motse is free and already active');
+  open('Pay for ' + p.n,
+    '<p class="muted">' + p.p + '. Choose how to pay.</p><div class="list">' +
+    ['Visa or Mastercard','Orange Money','MyZaka','Smega','Bank transfer'].map((m,i) => '<button class="item' + (i ? '' : ' on') + '" data-act="pick"><strong>' + m + '</strong><span class="ck">&#10003;</span></button>').join('') +
+    '</div><button class="btn ink" data-act="payGo">Pay ' + p.p.split(' ')[0] + '</button><p class="muted">Payments switch on once a merchant account is set up. Nothing is charged from this screen.</p>');
+}
+
+/* Search, menu, my reports, welcome */
+const PLACES = [['Main Mall',-24.6553,25.9086],['University of Botswana',-24.6610,25.9340],['Bus Rank',-24.6590,25.9105],['CBD',-24.6460,25.9070],
+  ['Game City',-24.6890,25.8795],['Riverwalk',-24.6740,25.9440],['Airport Junction',-24.6010,25.9270],['Princess Marina Hospital',-24.6570,25.9230],
+  ['Broadhurst',-24.6280,25.9290],['Block 8',-24.6050,25.9450],['Old Naledi',-24.6830,25.9030],['Tlokweng',-24.6680,25.9750],['Phakalane',-24.5680,25.9670]];
+const km = (a, b) => mePos ? (map.distance(mePos, [a,b]) / 1000).toFixed(1) + ' km' : '';
+function searchSheet(){
+  placing(false); const q = $('#q').value.trim().toLowerCase();
+  const hits = PLACES.map((p,i) => [p,i]).filter(x => x[0][0].toLowerCase().includes(q));
+  open('Search', (hits.length ? '<div class="list">' + hits.map(x => '<button class="item" data-act="go" data-k="' + x[1] + '"><strong>' + x[0][0] + '</strong><span class="muted">' + km(x[0][1],x[0][2]) + '</span></button>').join('') + '</div>'
+    : '<p class="muted">No saved place matches. Press Enter to search all of Botswana.</p>'));
+}
+async function geocode(){
+  const q = $('#q').value.trim(); if (!q) return;
+  try {
+    const res = await fetch('https://nominatim.openstreetmap.org/search?format=json&limit=6&countrycodes=bw&q=' + encodeURIComponent(q));
+    const d = await res.json();
+    open('Search', d.length ? '<div class="list">' + d.map(x => '<button class="item" data-act="goto" data-lat="' + esc(x.lat) + '" data-lng="' + esc(x.lon) + '"><strong>' + esc(x.display_name.split(',').slice(0,2).join(',')) + '</strong><span class="muted">' + km(+x.lat,+x.lon) + '</span></button>').join('') + '</div>'
+      : '<p class="muted">Nothing found for that search. Try a street or area name.</p>');
+  } catch(e){ toast('Search is unavailable right now. Check your connection'); }
+}
+function reportsSheet(){
+  open('My reports', mine.length ? '<div class="list">' + mine.slice().reverse().map(i => '<button class="item" data-act="show" data-id="' + esc(i.id) + '"><span><strong>' + TYPES[i.type].l + '</strong><span class="muted">' + ago(i.time) + '</span></span></button>').join('') + '</div>'
+    : '<p>You have not reported anything yet.</p><button class="btn" data-act="startReport">Report an incident</button>');
+}
+const menu = on => document.body.classList.toggle('menu', on);
+$('#bMenu').onclick = () => menu(true);
+$('#scrim').onclick = () => menu(false);
+$('#drawer').addEventListener('click', e => { const b = e.target.closest('[data-go]'); if (!b) return; menu(false);
+  const g = b.dataset.go; placing(false);
+  if (g === 'gbv') gbv(); else if (g === 'reports') reportsSheet(); else if (g === 'plans'){ account(); $('#sheetBody').scrollTop = 1e4; } else if (g === 'layers') layersSheet(); else goView(g); });
+$('#q').addEventListener('focus', searchSheet);
+$('#q').addEventListener('input', searchSheet);
+$('#q').addEventListener('keydown', e => { if (e.key === 'Enter'){ e.preventDefault(); geocode(); } });
+if (!store.get('gb_seen')) $('#welcome').hidden = false;
+const welcomed = loc => { store.set('gb_seen', 1); const w = $('#welcome'); w.classList.add('done'); setTimeout(() => w.remove(), 600); if (loc) locate(true); };
+$('#wGo').onclick = () => welcomed(false);
+$('#wLoc').onclick = () => welcomed(true);
+
+/* Long press to pin, GBV support, contacts */
+let tempPin, contacts = store.get('gb_contacts', []), radius = store.get('gb_radius', 2), disguise = store.get('gb_disg', false);
+function clearTemp(){ if (tempPin){ map.removeLayer(tempPin); tempPin = null; } }
+map.on('contextmenu', e => { if (e.originalEvent) e.originalEvent.preventDefault(); placing(false); setNav('report');
+  draft = {lat:e.latlng.lat, lng:e.latlng.lng, type:null}; reportForm(); });
+$('#sheetBody').addEventListener('input', e => { if (e.target.id === 'rad'){ radius = +e.target.value; store.set('gb_radius', radius); $('#radv').textContent = radius + ' km'; } });
+const HELP = [['Police emergency','Immediate danger','999','999'],['Police GBV line','Toll free','0800600144','0800 600 144'],
+  ['BGBVC counselling','Free and confidential','14655','14655'],['BGBVC emergency line','Urgent help','+26774265081','74 265 081']];
+const gbvLabel = () => { $('#miGbv span').textContent = disguise ? 'Notes' : 'GBV support'; };
+gbvLabel();
+function gbv(){
+  open(disguise ? 'Notes' : 'GBV support',
+    '<button class="btn soft" data-act="exit">Leave this page quickly</button>' +
+    '<div class="list">' + HELP.map(h => '<a class="item" href="tel:' + h[2] + '"><span><strong>' + h[0] + '</strong><span class="muted">' + h[1] + '</span></span><strong>' + h[3] + '</strong></a>').join('') + '</div>' +
+    '<strong>What is happening</strong><div class="grid" id="gt">' + ['Physical','Emotional','Sexual','Financial','Stalking','Other'].map(t => '<button class="opt" data-act="pick">' + t + '</button>').join('') + '</div>' +
+    '<label for="gn">Private record<textarea id="gn" maxlength="600"></textarea></label>' +
+    '<label for="gp">PIN to seal it, 4 digits or more<input id="gp" type="password" inputmode="numeric" autocomplete="off"></label>' +
+    '<div class="row"><button class="btn" style="background:var(--gbv)" data-act="seal">Seal entry</button><button class="btn soft" data-act="unseal">Open my records</button></div>' +
+    '<div id="gout" class="list"></div>' +
+    '<p class="muted">Records are encrypted on this device with your PIN and never sent anywhere. A forgotten PIN cannot be recovered.</p>' +
+    '<button class="item' + (disguise ? ' on' : '') + '" data-act="disg"><strong>Show this section as Notes in the menu</strong><span class="ck">&#10003;</span></button>');
+}
+const b64 = b => btoa(String.fromCharCode(...new Uint8Array(b))), unb = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
+async function pinKey(pin, salt){ const m = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({name:'PBKDF2', salt:salt, iterations:200000, hash:'SHA-256'}, m, {name:'AES-GCM', length:256}, false, ['encrypt','decrypt']); }
+async function seal(pin, obj){ const salt = crypto.getRandomValues(new Uint8Array(16)), iv = crypto.getRandomValues(new Uint8Array(12));
+  const ct = await crypto.subtle.encrypt({name:'AES-GCM', iv:iv}, await pinKey(pin, salt), new TextEncoder().encode(JSON.stringify(obj)));
+  return {s:b64(salt), i:b64(iv), c:b64(ct)}; }
+async function unseal(pin, v){ return JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({name:'AES-GCM', iv:unb(v.i)}, await pinKey(pin, unb(v.s)), unb(v.c)))); }
+async function gbvDo(add){
+  if (!window.crypto || !crypto.subtle) return toast('Sealed records only work on the hosted app, not in this view');
+  const pin = $('#gp').value; if (pin.length < 4) return toast('Enter a PIN of at least 4 digits');
+  let list = []; const cur = store.get('gb_sealed', null);
+  try { if (cur) list = await unseal(pin, cur); } catch(e){ return toast('That PIN does not open your records'); }
+  if (add){ const t = $('#gn').value.trim(); if (!t) return toast('Write what happened first');
+    const ty = document.querySelector('#gt .on'); list.push({t:Date.now(), k:ty ? ty.textContent : '', n:t});
+    store.set('gb_sealed', await seal(pin, list)); $('#gn').value = ''; toast('Entry sealed'); }
+  $('#gout').innerHTML = list.slice().reverse().map(e => '<div class="note"><strong>' + esc(e.k || 'Entry') + '</strong>, ' + esc(new Date(e.t).toLocaleString()) + '<br>' + esc(e.n) + '</div>').join('') || '<p class="muted">No records yet.</p>';
+}
+
+/* Events */
+$('#sheetClose').onclick = close;
+$('#bIn').onclick = () => map.zoomIn(1);
+$('#bOut').onclick = () => map.zoomOut(1);
+$('#bLocate').onclick = () => locate(true);
+$('#bLayers').onclick = () => { placing(false); layersSheet(); };
+$('#pCancel').onclick = () => { placing(false); setNav('map'); };
+$('#pMe').onclick = () => locate(true);
+$('#pHere').onclick = () => { const c = map.getCenter(); draft = {lat:c.lat, lng:c.lng, type:null}; placing(false); reportForm(); };
+
+document.querySelector('nav').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (b) goView(b.dataset.view);
+});
+function goView(v){ setNav(v); placing(false);
+  if (v === 'map') $('#sheet').classList.remove('open');
+  if (v === 'report'){ $('#sheet').classList.remove('open'); placing(true); if (map.getZoom() < 15) map.flyTo(mePos || map.getCenter(), 16, {duration:.8}); }
+  if (v === 'thusa') thusa();
+  if (v === 'insights') insights();
+  if (v === 'account') account();
+}
+
+$('#sheetBody').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const a = b.dataset.act, k = b.dataset.k;
+  if (a === 'type'){ draft.type = k; document.querySelectorAll('#typeGrid .opt').forEach(o => o.classList.toggle('on', o === b)); }
+  if (a === 'post'){
+    if (!draft.type) return toast('Choose what happened first');
+    const r = {id:'m'+Date.now(), type:draft.type, lat:draft.lat, lng:draft.lng, time:Date.now() - Number($('#when').value)*H, note:$('#note').value.trim().slice(0,240)};
+    mine.push(r); store.set('gb_reports', mine); delete hidden[r.type]; store.set('gb_hidden', hidden);
+    render(); close(); map.flyTo([r.lat,r.lng], Math.max(map.getZoom(),16), {duration:.7}); toast('Report posted');
+  }
+  if (a === 'del'){ mine = mine.filter(i => i.id !== b.dataset.id); store.set('gb_reports', mine); render(); close(); toast('Report removed'); }
+  if (a === 'base'){ setBase(k); layersSheet(); }
+  if (a === 'filter'){ hidden[k] = !hidden[k]; store.set('gb_hidden', hidden); render(); layersSheet(); }
+  if (a === 'plan') pay(k);
+  if (a === 'pick') [...b.parentNode.children].forEach(o => o.classList.toggle('on', o === b));
+  if (a === 'payGo') toast('Payments are not connected yet. Nothing was charged');
+  if (a === 'go'){ const p = PLACES[k]; close(); map.flyTo([p[1],p[2]], 15.5, {duration:1}); }
+  if (a === 'goto'){ close(); map.flyTo([+b.dataset.lat, +b.dataset.lng], 16, {duration:1}); }
+  if (a === 'show'){ const i = mine.find(x => x.id === b.dataset.id); if (i) detail(i); }
+  if (a === 'startReport') goView('report');
+  if (a === 'tab') insights(k);
+  if (a === 'addc'){ const n = $('#cn').value.trim(), ph = $('#cp').value.trim(); if (!n || !ph) return toast('Add a name and a phone number');
+    contacts.push({n:n, p:ph}); store.set('gb_contacts', contacts); account(); $('#sheetBody').scrollTop = 1e4; }
+  if (a === 'rmc'){ contacts.splice(+k, 1); store.set('gb_contacts', contacts); account(); $('#sheetBody').scrollTop = 1e4; }
+  if (a === 'exit') close();
+  if (a === 'seal' || a === 'unseal') gbvDo(a === 'seal');
+  if (a === 'disg'){ disguise = !disguise; store.set('gb_disg', disguise); gbvLabel(); gbv(); }
+});
+
+render();
+moveInd(); addEventListener('resize', moveInd); if (document.fonts) document.fonts.ready.then(moveInd);
+setTimeout(() => { const s = $('#splash'); s.classList.add('done'); setTimeout(() => s.remove(), 900); }, 1700);
+</script>
+</body>
+</html>
